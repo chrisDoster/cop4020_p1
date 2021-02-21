@@ -19,9 +19,28 @@ bool eofReached(FILE* f)
 	}
 	return done;
 }
+bool isNewLine(int ch)
+{
+	if ((char)ch == '\n')
+	{
+		return true;
+	}
+	return false;
+}
 bool isWhiteSpace(int ch)
 {
-	if ((char)ch == ' ' || (char)ch == '\t')
+	if (isNewLine(ch) || (char)ch == ' ' || (char)ch == '\t')
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+bool isOperator(int ch)
+{
+	if ((char)ch == '+' || (char)ch == '-' || (char)ch == '*' || (char)ch == '/' || (char)ch == '=')
 	{
 		return true;
 	}
@@ -32,8 +51,7 @@ bool isWhiteSpace(int ch)
 }
 bool isDelimiter(int ch) // note: delimiter refers to any character that will stop the token-extraction process, white spaces are included as well as all legal operators
 {
-	if (isWhiteSpace(ch) || (char)ch == '+' || (char)ch == '-' || (char)ch == '*' 
-		|| (char)ch == '/' || (char)ch == ';' || (char)ch == '(' || (char)ch == ')')
+	if (isWhiteSpace(ch) || isOperator(ch) || (char)ch == ';' || (char)ch == '(' || (char)ch == ')')
 	{
 		return true;
 	}
@@ -42,45 +60,70 @@ bool isDelimiter(int ch) // note: delimiter refers to any character that will st
 		return false;
 	}
 }
-bool isNewLine(int ch)
+bool containsWhiteSpace(char* s)
 {
-	if ((char)ch == '\n')
+	int i=0;
+	while (s[i] != '\0')
 	{
-		return true;
+		if (s[i] == ' ' || s[i] == '\t' || s[i] == '\n')
+		{
+			return true;
+		}
+		i++;
 	}
 	return false;
 }
 char* nextToken(FILE* f)
 {
+	if (eofReached(f))
+	{
+		return NULL;
+	}
 	char* tok = NULL;
 	int ch = getc(f);
+	
+	// find position of first non-whitespace character, the first character of the next token
+	while (isWhiteSpace(ch) && !eofReached(f)) 
+	{
+		ch = getc(f);
+		pos++;
+	}
 	int start = pos;
+	
+	// handle case that token is operator
+	if (isDelimiter(ch))
+	{
+		pos++;
+		tok = (char*) malloc(2*sizeof(char));
+		tok[0] = ch;
+		tok[1] = '\0';
+		return tok;
+	}
+	
+	// find position immediately after current token
 	while (!isDelimiter(ch) && !eofReached(f)) // while the next character(ch) is not a delimiter
 	{
 		ch = getc(f);
-		// puts("one");
 		pos++;
 	}
 	int numCharacters = pos - start;
-	// ch is a delimiter at this point
+	
+	// ch is a delimiter of some sort at this point
 	fseek(f, start, SEEK_SET);
+	
 	tok = (char*) malloc((numCharacters+1)*sizeof(char)); // allocate space for string
-	for (int i=0; i < numCharacters; ++i)
+	for (int i=0; i < numCharacters; ++i) // fill string with characters
 	{
-		// puts("two");
 		tok[i] = getc(f);
 	}
 	tok[numCharacters] = '\0';
 	
-	// find start of next token
-	while (isWhiteSpace(ch = getc(f)) && !eofReached(f))
+	// handle case that whitespace characters were somehow extracted, indicating error
+	if (containsWhiteSpace(tok))
 	{
-		// puts("three");
-		pos++;
+		free(tok);
+		tok = NULL;
 	}
-	
-	// ensure file points to first char of next tok
-	fseek(f, -1, SEEK_CUR);
 	
 	return tok;
 }
@@ -99,7 +142,7 @@ struct symbol
 // symbol table
 struct symbol_table
 {
-	struct symbol*	table;
+	symbol*	table;
 };
 void insert(char* s, int type, int line)
 {
@@ -117,12 +160,49 @@ int lineNo = 1;
 
 bool isValidID(char* s)
 {
-	// fixme
+	if (!isalpha(s[0]))
+	{
+		return false;
+	}
+	int i=0;
+	while (s[i] != '\0')
+	{
+		if (!isalpha(s[i]) && !isdigit(s[i]) && s[i] != '_')
+		{
+			return false;
+		}
+		if (s[i] == '_')
+		{
+			if (s[i+1] == '_' || s[i+1] == '\0')
+			{
+				return false;
+			}
+		}
+		i++;
+	}
 	return true;
 }
 bool isValidNum(char* s)
 {
-	// fixme
+	int i=0;
+	int numDots = 0;
+	while (s[i] != '\0')
+	{
+		if (!isdigit(s[i]) && s[i] != '.')
+		{
+			return false;
+		}
+		if (s[i] == '.')
+		{
+			numDots++;
+		}
+		if (numDots > 1)
+		{
+			return false;
+		}
+		i++;
+	}
+	return true;
 }
 char* errorMsg()
 {
@@ -153,13 +233,13 @@ int main(int argc, char* argv[])
 	{
 		puts("start");
 		
-		while (!eofReached(fp))
+		int i=0;
+		while (!eofReached(fp)) // EOF NOT REACHED : NEXTTOKEN RETURNING NULL
 		{
-			//puts("four");
 			// get next token and check validity
 			char* token = nextToken(fp);
-			bool valid = (token != NULL);
-			if (valid)
+			bool valid = isValidID(token);
+			if (true)
 			{
 				// if token is valid, print token
 				puts(token);
@@ -167,9 +247,10 @@ int main(int argc, char* argv[])
 			else
 			{
 				// if token invalid, print error message
-				puts(errorMsg()); 
+				puts(errorMsg());
 			}
 			free(token);
+			i++;
 		}
 		
 		puts("end");
